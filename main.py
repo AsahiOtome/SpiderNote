@@ -1,3 +1,4 @@
+from MangaDown import MangaDown
 from bilibili_download import GetBilibiliVideo
 from util import *
 
@@ -12,7 +13,12 @@ if __name__ == 'main':
         elif down_xpath == '2':
             pass
         elif down_xpath == '3':
-            pass
+            with open("config.txt", 'r', encoding='utf-8') as f:
+                down_list = f.read().split('\n')
+                down_list.remove("")
+            for url in down_list:
+                md = MangaDown(url, './Manga')
+                md.main()
         elif down_xpath == '0':
             break
         else:
