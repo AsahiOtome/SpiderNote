@@ -15,6 +15,7 @@ from subprocess import Popen
 import qrcode
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import subprocess
 
 """包含了所有通用性爬虫、数据分析、文件处理等功能的要你命3000功能包"""
 
@@ -395,6 +396,33 @@ def fix_filename(filename):
     regex = r'[\?\.\:\>\<\\\/\|\*]'
     filename = re.sub(regex, "", filename)
     return filename
+
+
+def ts_concat(file_in, file_out):
+    """
+    用于把ts文件切片合并为单一文件, 注意: file_in与file_out不可在同一目录下, 否则会删除file_out
+    :param file_in: 输入文件路径
+    :param file_out: 输出对象路径, 含文件名
+    :return:
+    """
+    if not examine_file(file_in, delete=False):
+        raise Exception("对象文件不存在")
+    else:
+        cmd = f"ffmpeg.exe -f concat -safe 0 -i {file_in} -c copy {file_out}"
+        examine_file(file_out)
+        p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        p.communicate()
+        while True:
+            time.sleep(2)
+            if p.returncode == 0:
+                print("\t合并处理: 正在删除临时文件……", end='\r')
+                try:
+                    if os.path.exists(os.path.dirname(file_in)):
+                        os.remove(os.path.dirname(file_in))
+                except IOError:
+                    continue
+                break
+        print("\t合并处理: 已完成")
 
 
 class StackDownloader(object):
