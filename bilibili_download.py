@@ -142,7 +142,7 @@ class GetBilibiliVideo(object):
         self.bv_id = []
 
         # 下载文件存储与校对地址
-        self.down_path = 'D:\\Temp_pic\\'
+        self.down_path = 'D:\\SpiderNote\\哔哩哔哩动画'
 
     def _get_uid(self):
         """获取到对应账号的uid用以访问个人空间"""

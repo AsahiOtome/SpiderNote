@@ -1,17 +1,23 @@
 import os.path
+import re
+
 import parsel
 import subprocess
 from util import *
 import random
 import pickle
-import copy
+from io import BytesIO
+from PIL import Image
 from util import *
 
 
 class MangaDown(object):
     def __init__(self, url, path):
         self.url = url
+        self.read_url = 'https://jmcomic2.onl'
+        self.pic_url = []
         self.path = path
+        self.title = "未命名"
         self.session = requests.session()
         self.session.headers = create_headers()
 
@@ -20,13 +26,29 @@ class MangaDown(object):
         return resp
 
     def parsel(self):
-        data = parsel.Selector(self._get_info())
-        data.xpath("")
+        data = parsel.Selector(self._get_info().text)
+        self.title = data.xpath("//h1[@class='book-name' and @id='book-name']/text()").extract_first()
+        url_tail = data.xpath("//a[@class='btn btn-primary' and text()='开始阅读']").attrib.get("href")
+        self.read_url += url_tail
 
     def main(self):
-        logger.info("开始解析")
+        # logger.info("开始解析对象属性")
         self.parsel()
-        logger.info("开始下载")
+        # 创建目录
+        self.path = os.path.join(self.path, self.title)
+        examine_dir(self.path)
+        # logger.info("开始解析资源链接")
+        self._download()
+
+    def _download(self):
+        resp = try_until_response_get(self.read_url, headers=self.session.headers, trys=3)
+        data = parsel.Selector(resp.text)
+        select_list = data.xpath("//div[@class='center scramble-page']")
+        for select in select_list:
+            self.pic_url.append(select.xpath("./img").attrib.get("data-original"))
+        # logger.info(f"准备开始多线程下载, 需下载图片总数: {len(self.pic_url)}")
+        pdown = PicDownloader(self.pic_url, self.title, self.path, self.session)
+        pdown.main()
 
 
 class PicDownloader(object):
@@ -36,28 +58,27 @@ class PicDownloader(object):
     dl.main()
     """
 
-    def __init__(self, url, name, filepath, session: requests.session, max_num=8):
+    def __init__(self, url_list, name, filepath, session: requests.session, max_num=8):
         """
         载入关键信息并初始化
-        :param url: 待爬取的对象下载链接
+        :param url_list: 待爬取的对象下载链接
         :param max_num: 设定的线程最大数目
         :param filepath: 保存的文件路径
         :param session: 用户连接信息
         """
-        self.url = url
+        self.url_list = url_list
         self.name = name
         self.num = max_num
         self.path = filepath
         self.session = session
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
-        r = self.session.get(self.url, headers=self.session.headers)
-        self.size = r   # 读取该网页包含的图片总数
+        self.size = len(self.url_list)
 
     def down(self, url, index, chunk_size=10240):
         """
         下载程序主体
         :param url: 实际访问的切片下载地址
-        :param index: 下载的切片序号)
+        :param index: 下载的切片序号
         :param chunk_size: 分块大小(按大小进行对象数据的切割, 依次操作, 以防止内存占用过大)
         :return:
         """
@@ -71,22 +92,29 @@ class PicDownloader(object):
                 if trys >= 3:
                     raise Exception(f"访问下载链接超时! | index: {index} | status: {resp.status_code}")
                 time.sleep(2)
-        with open(os.path.join(self.path, f'{self.name}_{index}.ts'), "wb") as f:
-            for chunk in resp.iter_content(chunk_size):
-                f.write(chunk)
-                self.getsize += 1  # 更新getsize值, 已下载内容大小
+        byte_stream = BytesIO(resp.content)
+        img = Image.open(byte_stream)
+        index = fix_filename(index)
+        examine_file(os.path.join(self.path, f'{index}.jpg'))
+        img.save(os.path.join(self.path, f'{index}.jpg'), 'JPEG')
+        self.getsize += 1  # 更新getsize值, 已下载内容大小
 
     def main(self):
         """
         使用多线程函数进行管理
         :return:
         """
+        t = threading.Thread(target=self._process, )
+        t.start()
+        # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
         tp = ThreadPoolExecutor(max_workers=self.num)  # 加载多线程函数, 设置最大线程数
         futures = []
-        for _ in range(self.size):  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
-            url = self.url + '.ts'
-            future = tp.submit(self.down, url)  # 将函数提交多线程, 并赋予参数
+        for url in self.url_list:  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
+            index = re.findall(r'.*/(.*?)\.\w+$', url)[0]
+            future = tp.submit(self.down, url, index)  # 将函数提交多线程, 并赋予参数
             futures.append(future)
+
+    def _process(self):
         while True:
             process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             time.sleep(1)  # 按照间隔1s来更新下载进展
