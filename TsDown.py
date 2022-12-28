@@ -1,4 +1,6 @@
 import os.path
+import re
+
 import parsel
 import subprocess
 from util import *
@@ -9,47 +11,57 @@ from util import *
 
 
 class TsDown(object):
-    def __init__(self):
-        pass
-
-    def download_video(self, url):
-        video_url, audio_url, title = self.get_url(url)
-        title = fix_filename(title)
-        if os.path.exists(os.path.join(self.down_path, f'{title}.mp4')):
-            print(f'{title} | 视频文件已存在, 执行跳过...')
-            return
-        print(f'{title} | 视频最高品质: {highest_quality} | 可下载最高品质: {actual_quality}')
-        dl = Downloader(video_url, '视频文件', os.path.join(self.down_path, f'{title}_.mp4'), self.session)
-        dl.main()
-        self._splicing(self.down_path, title)
-        time.sleep(2 + random.random())
-
-
-class StackDownloader(object):
-    """
-    连续型多线程下载器, 适用于多个视频切片, 标准调用方法:
-    dl = Downloader(url, 文件名, path, session)
-    dl.main()
-    """
-
-    def __init__(self, url, url_index, name, filepath, session: requests.session, max_num=8):
-        """
-        载入关键信息并初始化
-        :param url: 待爬取的对象下载链接
-        :param max_num: 设定的线程最大数目
-        :param filepath: 保存的文件路径
-        :param session: 用户连接信息
-        """
+    def __init__(self, url, path):
         self.url = url
-        self.url_index = url_index
-        self.name = name
-        self.num = max_num
-        self.path = filepath
-        self.session = session
+        self.path = path
+        self.title = "未命名"
+        self.url_head = ""
+        self.index_info = []
+        self.session = requests.session()
+        self.session.headers = create_headers()
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
-        self.size = len(self.url_index)  # 获取对象切片数量信息
+        self.size = 0  # 获取对象切片数量信息
 
-    def down(self, url, index, chunk_size=10240):
+    def _get_info(self):
+        resp = try_until_response_get(self.url, headers=self.session.headers, trys=3)
+        return resp
+
+    def parsel(self):
+        data = parsel.Selector(self._get_info().text)
+        self.title = data.xpath("//h1[@class='book-name' and @id='book-name']/text()").extract_first()
+        m3u8_url = data.xpath("")
+        resp = try_until_response_get(m3u8_url, headers=self.session.headers, trys=3)
+        self.url_head = ""
+        self.index_info = re.findall(r"index(\d+).ts", resp.text)
+
+    def main(self):
+        # logger.info("开始解析对象属性")
+        self.parsel()
+        # 创建目录
+        self.path = os.path.join(self.path, self.title)
+        examine_dir(self.path)
+        # logger.info("开始解析资源链接")
+        self._stack_downloader()
+        ts_concat(self.path, os.path.dirname(self.path))
+
+    def _stack_downloader(self):
+        self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
+        self.size = len(self.index_info)  # 获取对象切片数量信息
+        """
+        使用多线程函数进行管理
+        :return:
+        """
+        t = threading.Thread(target=self._monitor, )
+        t.start()
+        # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
+        tp = ThreadPoolExecutor(max_workers=8)  # 加载多线程函数, 设置最大线程数
+        futures = []
+        for index in self.index_info:  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
+            url = self.url_head + index + '.ts'
+            future = tp.submit(self._down, url, index)  # 将函数提交多线程, 并赋予参数
+            futures.append(future)
+
+    def _down(self, url, index, chunk_size=10240):
         """
         下载程序主体
         :param url: 实际访问的切片下载地址
@@ -67,31 +79,16 @@ class StackDownloader(object):
                 if trys >= 3:
                     raise Exception(f"访问下载链接超时! | index: {index} | status: {resp.status_code}")
                 time.sleep(2)
-        with open(os.path.join(self.path, f'{self.name}_{index}.ts'), "wb") as f:
+        with open(os.path.join(self.path, f'{index}.ts'), "wb") as f:
             for chunk in resp.iter_content(chunk_size):
                 f.write(chunk)
                 self.getsize += 1  # 更新getsize值, 已下载内容大小
 
-    def main(self):
-        """
-        使用多线程函数进行管理
-        :return:
-        """
-        t = threading.Thread(target=self._process, )
-        t.start()
-        # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
-        tp = ThreadPoolExecutor(max_workers=self.num)  # 加载多线程函数, 设置最大线程数
-        futures = []
-        for index in self.url_index:  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
-            url = self.url + index + '.ts'
-            future = tp.submit(self.down, url, index)  # 将函数提交多线程, 并赋予参数
-            futures.append(future)
-
-    def _process(self):
+    def _monitor(self):
         while True:
             process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             time.sleep(1)  # 按照间隔1s来更新下载进展
-            print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
+            print(f'\t{self.title} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
             if process >= 100:  # 下载进度超过100%
-                print(f'\t{self.name} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')
+                print(f'\t{self.title} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')
                 break
