@@ -61,7 +61,7 @@ class BilibiliLogin(object):
         resp = self._get_login_page()
         qrcode_data = parse_json(resp.text).get("data")
 
-        image_file = './videoMP4\\qrcode.png'
+        image_file = './qrcode.png'
         qrcode_save(qrcode_data.get("url"), image_file)
         logger.info("已获取登陆验证二维码, 请打开手机App扫码进行登陆")
         open_image(image_file)
@@ -166,7 +166,7 @@ class GetBilibiliVideo(object):
         # 获取对应收藏夹的id号
         logger.info(f"已接收指令, 正在访问收藏夹: {list_fav[fn - 1].get('title')}")
         fid = list_fav[fn - 1].get("id")
-        page_amount = int(list_fav[fn - 1].get('media_count') / 20) + 1
+        page_amount = math.ceil(list_fav[fn - 1].get('media_count') / 20)
         time.sleep(0.1)
         while True:
             print(f"当前收藏夹视频页数总共为 {page_amount} 页, 请选择访问页数:\n[输入0] 全选\n[输入1至{page_amount}] 选择第N页")
@@ -247,7 +247,11 @@ class GetBilibiliVideo(object):
         return data
 
     def download_video(self, url):
-        video_url, audio_url, title, actual_quality, highest_quality = self.get_url(url)
+        try:
+            video_url, audio_url, title, actual_quality, highest_quality = self.get_url(url)
+        except FileNotFoundError:
+            print(f'None | 视频已被删除, 执行跳过...')
+            return
         title = fix_filename(title)
         if os.path.exists(os.path.join(self.down_path, f'{title}.mp4')):
             print(f'{title} | 视频文件已存在, 执行跳过...')
@@ -270,6 +274,8 @@ class GetBilibiliVideo(object):
 
         # 获取视频播放信息
         play_info = xpath.xpath('/html/head/script[contains(text(), "window.__playinfo")]/text()').extract_first()
+        if type(play_info) == 'NoneType':
+            raise FileNotFoundError()
         data = parse_json(play_info).get("data")
         video = pd.DataFrame(data.get("dash").get("video"))
         audio = pd.DataFrame(data.get("dash").get("video"))
@@ -283,7 +289,10 @@ class GetBilibiliVideo(object):
         video_url = video.loc[0, 'baseUrl']
         audio_url = audio.loc[0, 'baseUrl']
 
-        title = f'【{author}】 {title}'  # 文件名命名格式, 不含后缀
+        if title.find(f'【{author}】') >= 0:
+            pass
+        else:
+            title = f'【{author}】 {title}'  # 文件名命名格式, 不含后缀
 
         return video_url, audio_url, title, actual_quality, highest_quality
 

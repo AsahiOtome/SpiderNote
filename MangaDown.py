@@ -1,11 +1,6 @@
 import os.path
-import re
 
 import parsel
-import subprocess
-from util import *
-import random
-import pickle
 from io import BytesIO
 from PIL import Image
 from util import *
@@ -74,12 +69,11 @@ class PicDownloader(object):
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
         self.size = len(self.url_list)
 
-    def down(self, url, index, chunk_size=10240):
+    def down(self, url, index):
         """
         下载程序主体
         :param url: 实际访问的切片下载地址
         :param index: 下载的切片序号
-        :param chunk_size: 分块大小(按大小进行对象数据的切割, 依次操作, 以防止内存占用过大)
         :return:
         """
         trys = 0
@@ -113,12 +107,30 @@ class PicDownloader(object):
             index = re.findall(r'.*/(.*?)\.\w+$', url)[0]
             future = tp.submit(self.down, url, index)  # 将函数提交多线程, 并赋予参数
             futures.append(future)
+        tp.shutdown(wait=True)
+        # logger.info("任务完成")
 
     def _process(self):
         while True:
             process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
-            time.sleep(1)  # 按照间隔1s来更新下载进展
+            time.sleep(0.5)  # 按照间隔1s来更新下载进展
             print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
             if process >= 100:  # 下载进度超过100%
                 print(f'\t{self.name} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')
                 break
+
+
+if __name__ == "__main__":
+    logger.info("开始执行漫画下载任务")
+    save_path = 'D:\\SpiderNote\\Manga'
+    with open("manga.txt", 'r', encoding='utf-8') as f:
+        down_list = f.read().split('\n')
+        down_list.remove("")
+    logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
+    for _ in down_list:
+        md = MangaDown(_, save_path)
+        md.main()
+    time.sleep(2)
+    logger.info("已完成全部下载任务, 开始压缩文件")
+    zipfile(save_path, "zip")
+    logger.info("全部任务完成")

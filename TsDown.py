@@ -37,12 +37,13 @@ class TsDown(object):
     def main(self):
         # logger.info("开始解析对象属性")
         self.parsel()
+        self.title = fix_filename(self.title)
         # 创建目录
         self.path = os.path.join(self.path, self.title)
         examine_dir(self.path)
         # logger.info("开始解析资源链接")
         self._stack_downloader()
-        ts_concat(self.path, os.path.dirname(self.path))
+        ts_concat(os.path.join(self.path, 'index.txt'), os.path.join(os.path.dirname(self.path), self.title+'.mp4'))
 
     def _stack_downloader(self):
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
@@ -79,10 +80,12 @@ class TsDown(object):
                 if trys >= 3:
                     raise Exception(f"访问下载链接超时! | index: {index} | status: {resp.status_code}")
                 time.sleep(2)
+        with open(os.path.join(self.path, 'index.txt'), 'a+') as f:
+            f.write('file \"' + os.path.join(self.path, f'{index}.ts') + '\"\n')
         with open(os.path.join(self.path, f'{index}.ts'), "wb") as f:
             for chunk in resp.iter_content(chunk_size):
                 f.write(chunk)
-                self.getsize += 1  # 更新getsize值, 已下载内容大小
+        self.getsize += 1  # 更新getsize值, 已下载内容大小
 
     def _monitor(self):
         while True:

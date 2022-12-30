@@ -37,14 +37,17 @@ def zipfile(target_dir, pattern=None, fmt='zip'):
                 continue
             zip_file = f'{file}.{fmt}'
             if examine_file(os.path.join(target_dir, zip_file), delete=False):
+                # 压缩包文件已存在则跳过
                 continue
             cmd = f'"D:\\ProgramFiles\\7-Zip\\7z.exe" a -t{fmt}' \
                   f' \"{os.path.join(target_dir, zip_file)}\" \"{os.path.join(target_dir, file)}\"'
-            p = Popen(cmd, shell=True, universal_newlines=True, encoding='utf-8')
+            p = Popen(cmd, shell=True, universal_newlines=True, encoding='utf-8', stdout=subprocess.PIPE
+                      , stderr=subprocess.STDOUT)
             while True:
                 """等待单个文件压缩完成后再进行下一个"""
                 if p.poll() == 0:
                     break
+            shutil.rmtree(os.path.join(target_dir, file))
         return True
     except Exception as e:
         return e
@@ -362,7 +365,7 @@ def get_digit_input(obj_list, esp='esp', mode='single'):
             content += f'[{_}] {obj_list[i]}\n'
     if mode == 'list':
         content += f'[0] 全选\n'
-    content += f'[{esp}] 退出程序'
+    content += f'[{esp}] 退出程序\n请输入: '
     while True:
         reply = input(content)
         reply = reply.strip()
@@ -428,8 +431,6 @@ def ts_concat(file_in, file_out):
                     continue
                 break
         print("\t合并处理: 已完成")
-
-
 
 
 class Downloader(object):

@@ -13,11 +13,21 @@ if __name__ == '__main__':
             gbv.main()
             break
         elif down_xpath == '2':
-            pass
+            logger.info("开始执行TS video下载任务")
+            path = 'D:\\SpiderNote\\Video'
+            with open("video.txt", 'r', encoding='utf-8') as f:
+                down_list = f.read().split('\n')
+                down_list.remove("")
+            logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
+            for url in down_list:
+                md = MangaDown(url, path)
+                md.main()
+            time.sleep(2)
+            break
         elif down_xpath == '3':
             logger.info("开始执行漫画下载任务")
             path = 'D:\\SpiderNote\\Manga'
-            with open("config.txt", 'r', encoding='utf-8') as f:
+            with open("manga.txt", 'r', encoding='utf-8') as f:
                 down_list = f.read().split('\n')
                 down_list.remove("")
             logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
