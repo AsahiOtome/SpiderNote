@@ -1,3 +1,4 @@
+import pickle
 import sys
 import json
 import re
@@ -16,6 +17,10 @@ import qrcode
 from concurrent.futures import ThreadPoolExecutor
 import copy
 import subprocess
+import cv2 as cv
+import pytesseract
+from PIL import Image
+
 
 """包含了所有通用性爬虫、数据分析、文件处理等功能的要你命3000功能包"""
 
@@ -51,6 +56,32 @@ def zipfile(target_dir, pattern=None, fmt='zip'):
         return True
     except Exception as e:
         return e
+
+
+def recognize_text(image):
+    """
+    验证码识别组件
+    :param image:图片对象或文件路径
+    :return:
+    """
+    src = cv.imread(image)
+    # cv.imshow('input image', src)
+    # 边缘保留滤波  去噪
+    blur = cv.pyrMeanShiftFiltering(src, sp=8, sr=60)
+    # cv.imshow('dst', blur)
+    # 灰度图像
+    gray = cv.cvtColor(blur, cv.COLOR_BGR2GRAY)
+    # 二值化  设置阈值  自适应阈值的话 黄色的4会提取不出来
+    ret, binary = cv.threshold(gray, 185, 255, cv.THRESH_BINARY_INV)
+    # print(f'二值化设置的阈值：{ret}')
+    # cv.imshow('binary', binary)
+    # 逻辑运算  让背景为白色  字体为黑  便于识别
+    cv.bitwise_not(binary, binary)
+    # cv.imshow('bg_image', binary)
+    # 识别
+    test_message = Image.fromarray(binary)
+    text = pytesseract.image_to_string(test_message)
+    return text.replace("\n", "")
 
 
 def set_logger():
@@ -514,6 +545,72 @@ class Downloader(object):
             if process >= 100:  # 下载进度超过100%
                 print(f'\t{self.name} | 下载进度: {100.00:6}% | speed:  00.00KB/s')
                 break
+
+
+class Login(object):
+    """
+    登陆组件原型
+    """
+
+    def __init__(self):
+        self.cookies_dir_path = "./cookies/"
+        self.cookies_file_name = __file__.split('/')[-1].split('.')[0]
+        self.session = requests.session()
+        self.session.headers = create_headers()
+
+    def _validate_login(self):
+        pass
+
+    def login(self):
+        self.save_cookies_to_local(self.cookies_file_name)
+
+    def get_session(self):
+        """
+        获取当前Session
+        :return:
+        """
+        return self.session
+
+    def get_cookies(self):
+        """
+        获取当前Cookies
+        :return:
+        """
+        return self.get_session().cookies
+
+    def set_cookies(self, cookies):
+        self.session.cookies.update(cookies)
+
+    def load_cookies_from_local(self):
+        """
+        从本地加载Cookie
+        :return:
+        """
+        cookies_file = ''
+        if not os.path.exists(self.cookies_dir_path):
+            return False
+        for name in os.listdir(self.cookies_dir_path):
+            if name.endswith(".cookies"):
+                cookies_file = '{}{}'.format(self.cookies_dir_path, name)
+                break
+        if cookies_file == '':
+            return False
+        with open(cookies_file, 'rb') as f:
+            local_cookies = pickle.load(f)
+        self.set_cookies(local_cookies)
+
+    def save_cookies_to_local(self, cookie_file_name):
+        """
+        保存Cookie到本地
+        :param cookie_file_name: 存放Cookie的文件名称
+        :return:
+        """
+        cookies_file = '{}{}.cookies'.format(self.cookies_dir_path, cookie_file_name)
+        directory = os.path.dirname(cookies_file)
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        with open(cookies_file, 'wb') as f:
+            pickle.dump(self.get_cookies(), f)
 
 
 if __name__ == "__main__":

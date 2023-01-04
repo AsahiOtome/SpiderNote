@@ -6,15 +6,57 @@ from PIL import Image
 from util import *
 
 
+class MangaLogin(Login):
+    def __init__(self, user, pwd):
+        super().__init__()
+        self.user = user
+        self.pwd = pwd
+
+    def login(self):
+        """
+        1. 读取本地cookies 2.尝试访问用户页面 3.访问失败则重新登陆
+        :return:
+        """
+        cookie_path = os.path.join(self.cookies_dir_path, self.cookies_file_name)
+        if os.path.exists(cookie_path):
+            self.load_cookies_from_local()
+            if self._validate_login():
+                return True
+
+        login_url = 'https://jmcomic2.onl/login'
+        self.session.headers['refer'] = 'https://jmcomic2.onl/'
+        data = {
+            'username': self.user,
+            'password': self.pwd,
+            'id_remember': 'on',
+            'login_remember': 'on',
+            'submit_login': ''
+        }
+        self.session.post(login_url, data=data)
+        self.save_cookies_to_local(self.cookies_file_name)
+        return True
+
+    def _validate_login(self):
+        """
+        访问用户个人页面, 状态为200则为成功, 状态为301则说明跳转至登陆页面
+        :return:
+        """
+        user_url = 'https://jmcomic2.onl/user'
+        resp = self.session.get(user_url)
+        if resp.status_code == '200':
+            return True
+        else:
+            return False
+
+
 class MangaDown(object):
-    def __init__(self, url, path):
+    def __init__(self, url, path, session):
         self.url = url
         self.read_url = 'https://jmcomic2.onl'
         self.pic_url = []
         self.path = path
         self.title = "未命名"
-        self.session = requests.session()
-        self.session.headers = create_headers()
+        self.session = session
 
     def _get_info(self):
         resp = try_until_response_get(self.url, headers=self.session.headers, trys=3)
@@ -30,10 +72,10 @@ class MangaDown(object):
         # logger.info("开始解析对象属性")
         self.parsel()
         # 创建目录
-        self.path = os.path.join(self.path, self.title)
-        examine_dir(self.path)
+        # self.path = os.path.join(self.path, self.title)
+        # examine_dir(self.path)
         # logger.info("开始解析资源链接")
-        self._download()
+        # self._download()
 
     def _download(self):
         resp = try_until_response_get(self.read_url, headers=self.session.headers, trys=3)
@@ -122,13 +164,18 @@ class PicDownloader(object):
 
 if __name__ == "__main__":
     logger.info("开始执行漫画下载任务")
+    logger.info("正在登陆中")
+    ml = MangaLogin(user='j4205166118', pwd='kNbF57yO')
+    ml.login()
+    logger.info("登陆成功")
+
     save_path = 'D:\\SpiderNote\\Manga'
     with open("manga.txt", 'r', encoding='utf-8') as f:
         down_list = f.read().split('\n')
         down_list.remove("")
     logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
     for _ in down_list:
-        md = MangaDown(_, save_path)
+        md = MangaDown(_, save_path, ml.get_session())
         md.main()
     time.sleep(2)
     logger.info("已完成全部下载任务, 开始压缩文件")
