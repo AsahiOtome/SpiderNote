@@ -56,6 +56,7 @@ class BilibiliLogin(object):
                 return
             else:
                 logger.info(f"输入错误, 请勿输入 {is_delete}")
+                raise Exception("输入错误")
 
         """进行登陆二维码验证并反馈结果"""
         resp = self._get_login_page()

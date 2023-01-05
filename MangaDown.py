@@ -9,6 +9,7 @@ from util import *
 class MangaLogin(Login):
     def __init__(self, user, pwd):
         super().__init__()
+        self.cookies_file_name = __file__.split('/')[-1].split('.')[0]
         self.user = user
         self.pwd = pwd
 
@@ -17,7 +18,7 @@ class MangaLogin(Login):
         1. 读取本地cookies 2.尝试访问用户页面 3.访问失败则重新登陆
         :return:
         """
-        cookie_path = os.path.join(self.cookies_dir_path, self.cookies_file_name)
+        cookie_path = '{}{}.cookies'.format(self.cookies_dir_path, self.cookies_file_name)
         if os.path.exists(cookie_path):
             self.load_cookies_from_local()
             if self._validate_login():
@@ -33,7 +34,7 @@ class MangaLogin(Login):
             'submit_login': ''
         }
         self.session.post(login_url, data=data)
-        self.save_cookies_to_local(self.cookies_file_name)
+        self.save_cookies_to_local()
         return True
 
     def _validate_login(self):
@@ -51,35 +52,49 @@ class MangaLogin(Login):
 
 class MangaDown(object):
     def __init__(self, url, path, session):
-        self.url = url
-        self.read_url = 'https://jmcomic2.onl'
-        self.pic_url = []
-        self.path = path
-        self.title = "未命名"
         self.session = session
+        self.title = self.parsel(url)
+        self.album_id = re.findall(r"onl/album/(\d+)/", url)[0]
+        self.down_url = 'https://jmcomic2.onl/album_download/' + self.album_id
+        self.path = path
 
-    def _get_info(self):
-        resp = try_until_response_get(self.url, headers=self.session.headers, trys=3)
+    def _get_info(self, url):
+        resp = try_until_response_get(url, session=self.session, trys=3)
         return resp
 
-    def parsel(self):
-        data = parsel.Selector(self._get_info().text)
-        self.title = data.xpath("//h1[@class='book-name' and @id='book-name']/text()").extract_first()
-        url_tail = data.xpath("//a[@class='btn btn-primary' and text()='开始阅读']").attrib.get("href")
-        self.read_url += url_tail
+    def parsel(self, url):
+        data = parsel.Selector(self._get_info(url).text)
+        title = data.xpath("//h1[@class='book-name' and @id='book-name']/text()").extract_first()
+        # url_tail = data.xpath("//div[contains(@class, 'read-block')]")[0].\
+        #     xpath("./a[@style='padding: 5px']").attrib.get('href')
+        return title
 
     def main(self):
-        # logger.info("开始解析对象属性")
-        self.parsel()
         # 创建目录
-        # self.path = os.path.join(self.path, self.title)
-        # examine_dir(self.path)
+        self.path = os.path.join(self.path, self.title)
+        # examine_file(self.path)
         # logger.info("开始解析资源链接")
-        # self._download()
+        self._download()
 
     def _download(self):
-        resp = try_until_response_get(self.read_url, headers=self.session.headers, trys=3)
-        data = parsel.Selector(resp.text)
+        vcode_url = 'https://jmcomic2.onl/captcha/'
+        self.session.get(self.down_url)
+        self.session.headers['refer'] = self.down_url
+
+        # 获取验证码
+        resp = self.session.get(vcode_url)
+        with open("./vcode.jpg", 'wb') as p:
+            p.write(resp.content)
+        verification = recognize_text("./vcode.jpg")
+
+        data = {
+            'album_id': self.album_id,
+            'verification': verification
+        }
+        resp = self.session.post(self.down_url)
+
+        self.session.headers['refer'] = 'https://jmcomic2.onl'
+
         select_list = data.xpath("//div[@class='center scramble-page']")
         for select in select_list:
             self.pic_url.append(select.xpath("./img").attrib.get("data-original"))
@@ -177,7 +192,4 @@ if __name__ == "__main__":
     for _ in down_list:
         md = MangaDown(_, save_path, ml.get_session())
         md.main()
-    time.sleep(2)
-    logger.info("已完成全部下载任务, 开始压缩文件")
-    zipfile(save_path, "zip")
     logger.info("全部任务完成")

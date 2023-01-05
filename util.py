@@ -65,19 +65,19 @@ def recognize_text(image):
     :return:
     """
     src = cv.imread(image)
-    # cv.imshow('input image', src)
+    cv.imshow('input image', src)
     # 边缘保留滤波  去噪
     blur = cv.pyrMeanShiftFiltering(src, sp=8, sr=60)
-    # cv.imshow('dst', blur)
+    cv.imshow('dst', blur)
     # 灰度图像
     gray = cv.cvtColor(blur, cv.COLOR_BGR2GRAY)
     # 二值化  设置阈值  自适应阈值的话 黄色的4会提取不出来
     ret, binary = cv.threshold(gray, 185, 255, cv.THRESH_BINARY_INV)
     # print(f'二值化设置的阈值：{ret}')
-    # cv.imshow('binary', binary)
+    cv.imshow('binary', binary)
     # 逻辑运算  让背景为白色  字体为黑  便于识别
     cv.bitwise_not(binary, binary)
-    # cv.imshow('bg_image', binary)
+    cv.imshow('bg_image', binary)
     # 识别
     test_message = Image.fromarray(binary)
     text = pytesseract.image_to_string(test_message)
@@ -136,7 +136,7 @@ def try_until_response_get(url, headers=None, params=None, data=None, stream=Fal
     try:
         while True:
             try_times += 1
-            if session is not None:
+            if session:
                 resp = session.get(url=url, headers=headers, params=params, data=data, stream=stream)
             else:
                 resp = requests.get(url=url, headers=headers, params=params, data=data, stream=stream)
@@ -554,6 +554,7 @@ class Login(object):
 
     def __init__(self):
         self.cookies_dir_path = "./cookies/"
+        # 此变量需要被重写
         self.cookies_file_name = __file__.split('/')[-1].split('.')[0]
         self.session = requests.session()
         self.session.headers = create_headers()
@@ -599,13 +600,12 @@ class Login(object):
             local_cookies = pickle.load(f)
         self.set_cookies(local_cookies)
 
-    def save_cookies_to_local(self, cookie_file_name):
+    def save_cookies_to_local(self):
         """
         保存Cookie到本地
-        :param cookie_file_name: 存放Cookie的文件名称
         :return:
         """
-        cookies_file = '{}{}.cookies'.format(self.cookies_dir_path, cookie_file_name)
+        cookies_file = '{}{}.cookies'.format(self.cookies_dir_path, self.cookies_file_name)
         directory = os.path.dirname(cookies_file)
         if not os.path.exists(directory):
             os.makedirs(directory)
