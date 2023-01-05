@@ -92,7 +92,7 @@ class MangaDown(object):
             'verification': verification
         }
         resp = self.session.post(self.down_url)
-
+        url = resp.headers['location']
         self.session.headers['refer'] = 'https://jmcomic2.onl'
 
         select_list = data.xpath("//div[@class='center scramble-page']")
