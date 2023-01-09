@@ -2,7 +2,6 @@ import os.path
 
 import parsel
 from io import BytesIO
-from PIL import Image
 from util import *
 
 
