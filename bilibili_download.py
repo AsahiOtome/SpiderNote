@@ -51,7 +51,7 @@ class BilibiliLogin(object):
             if is_delete == 'y':
                 os.remove(cookie_path)
             elif is_delete == 'n':
-                self.load_cookies_from_local()
+                self.load_cookies_from_local(cookie_path)
                 logger.info("已读取本地cookies, 成功登入系统")
                 return
             else:
@@ -99,19 +99,13 @@ class BilibiliLogin(object):
     def set_cookies(self, cookies):
         self.session.cookies.update(cookies)
 
-    def load_cookies_from_local(self):
+    def load_cookies_from_local(self, cookie_file_name):
         """
         从本地加载Cookie
         :return:
         """
-        cookies_file = ''
+        cookies_file = '{}{}.cookies'.format(self.cookies_dir_path, cookie_file_name)
         if not os.path.exists(self.cookies_dir_path):
-            return False
-        for name in os.listdir(self.cookies_dir_path):
-            if name.endswith(".cookies"):
-                cookies_file = '{}{}'.format(self.cookies_dir_path, name)
-                break
-        if cookies_file == '':
             return False
         with open(cookies_file, 'rb') as f:
             local_cookies = pickle.load(f)

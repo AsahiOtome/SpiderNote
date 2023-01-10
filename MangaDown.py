@@ -32,7 +32,7 @@ class MangaLogin(Login):
             'login_remember': 'on',
             'submit_login': ''
         }
-        self.session.post(login_url, data=data)
+        resp = self.session.post(login_url, data=data)
         self.save_cookies_to_local()
         return True
 
@@ -43,7 +43,7 @@ class MangaLogin(Login):
         """
         user_url = 'https://jmcomic2.onl/user'
         resp = self.session.get(user_url)
-        if resp.status_code == '200':
+        if str(resp.status_code) == '200':
             return True
         else:
             return False
@@ -82,17 +82,16 @@ class MangaDown(object):
 
         # 获取验证码
         resp = self.session.get(vcode_url)
-        with open("./vcode.jpg", 'wb') as p:
-            p.write(resp.content)
-        verification = recognize_text("./vcode.jpg")
+        byte_stream = BytesIO(resp.content)
+        img = Image.open(byte_stream)
+        verification = recognize_text(img)
 
         data = {
             'album_id': self.album_id,
             'verification': verification
         }
-        resp = self.session.post(self.down_url)
-        url = resp.headers['location']
-        self.session.headers['refer'] = 'https://jmcomic2.onl'
+        self.session.headers['refer'] = self.down_url
+        resp = self.session.post(self.down_url, data=data)
 
         select_list = data.xpath("//div[@class='center scramble-page']")
         for select in select_list:
