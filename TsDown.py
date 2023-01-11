@@ -1,8 +1,6 @@
 import os.path
-import re
 
 import parsel
-import subprocess
 from util import *
 from Crypto.Cipher import AES
 from util import *
@@ -23,7 +21,7 @@ class TsDown(object):
 
     def _get_info(self, url):
         """访问主页面"""
-        resp = try_until_response_get(url, session=self.session, trys=3)
+        resp = self.session.get(url)
         return resp.text
 
     def parsel(self):
@@ -58,15 +56,19 @@ class TsDown(object):
         self.parsel()
         self.title = fix_filename(self.title)
         # 创建目录
-        self.path = os.path.join(self.path, self.title)
-        examine_dir(self.path)
+        self.path = os.path.join(self.path, 'temp')
+        examine_dir(self.path, delete=True)
         logger.info("开始解析资源链接")
         self._stack_downloader()
         while True:
             if self.getsize >= self.size:
                 break
-        ts_concat(os.path.join(self.path, self.title+'.txt'),
-                  os.path.join(os.path.dirname(self.path), self.title+'.mp4'))
+        dir_path = os.path.dirname(self.path)
+        logger.info("下载已完成, 开始进行视频合并")
+        ts_concat(os.path.join(self.path, 'temp.txt'),
+                  os.path.join(dir_path, 'temp_output.mp4'))
+        os.rename(os.path.join(os.path.dirname(self.path), 'temp_output.mp4'),
+                  os.path.join(dir_path, self.title+'.mp4'))
 
     def _stack_downloader(self):
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
@@ -75,7 +77,7 @@ class TsDown(object):
         使用多线程函数进行管理
         :return:
         """
-        examine_file(os.path.join(self.path, self.title+'.txt'), delete=True)
+        examine_file(os.path.join(self.path, 'temp.txt'), delete=True)
         t = threading.Thread(target=self._monitor, )
         t.start()
         # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
@@ -104,8 +106,8 @@ class TsDown(object):
                 if trys >= 3:
                     raise Exception(f"访问下载链接超时! | index: {index} | status: {resp.status_code}")
                 time.sleep(2)
-        with open(os.path.join(self.path, self.title+'.txt'), 'a+') as f1:
-            f1.write('file ' + os.path.join(self.path, index) + '\n')
+        with open(os.path.join(self.path, 'temp.txt'), 'a+') as f1:
+            f1.write('file ' + os.path.join(self.path, index).replace('\\', '\\\\') + '\n')
         with open(os.path.join(self.path, index), "wb") as f2:
             for chunk in resp.iter_content(chunk_size):
                 f2.write(self.cryptor.decrypt(chunk))

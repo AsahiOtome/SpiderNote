@@ -33,8 +33,11 @@ class MangaLogin(Login):
             'submit_login': ''
         }
         resp = self.session.post(login_url, data=data)
-        self.save_cookies_to_local()
-        return True
+        if self._validate_login():
+            self.save_cookies_to_local()
+            return True
+        else:
+            return False
 
     def _validate_login(self):
         """
@@ -92,6 +95,9 @@ class MangaDown(object):
         }
         self.session.headers['refer'] = self.down_url
         resp = self.session.post(self.down_url, data=data)
+
+
+
 
         select_list = data.xpath("//div[@class='center scramble-page']")
         for select in select_list:
