@@ -435,14 +435,10 @@ def ts_concat(file_in, file_out):
         p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         p.communicate()
         while True:
-            time.sleep(2)
+            time.sleep(10)
             if p.returncode == 0:
                 print("\t合并处理: 正在删除临时文件……", end='\r')
-                try:
-                    if os.path.exists(os.path.dirname(file_in)):
-                        os.remove(os.path.dirname(file_in))
-                except IOError:
-                    continue
+                shutil.rmtree(os.path.dirname(file_in))
                 break
         print("\t合并处理: 已完成")
 

@@ -3,7 +3,6 @@ import os.path
 import parsel
 from util import *
 from Crypto.Cipher import AES
-from util import *
 
 
 class TsDown(object):
@@ -24,7 +23,7 @@ class TsDown(object):
         resp = self.session.get(url)
         return resp.text
 
-    def parsel(self):
+    def parser(self):
         """解析网址, 获取基本信息与下载访问地址"""
         data = parsel.Selector(self._get_info(self.url))
 
@@ -53,7 +52,7 @@ class TsDown(object):
 
     def main(self):
         logger.info("开始解析对象属性")
-        self.parsel()
+        self.parser()
         self.title = fix_filename(self.title)
         # 创建目录
         self.path = os.path.join(self.path, 'temp')
@@ -77,7 +76,11 @@ class TsDown(object):
         使用多线程函数进行管理
         :return:
         """
-        examine_file(os.path.join(self.path, 'temp.txt'), delete=True)
+        temp_content = ''
+        for _ in range(self.size):
+            temp_content += 'file ' + os.path.join(self.path, f'index{_}.ts').replace('\\', '\\\\') + '\n'
+        with open(os.path.join(self.path, 'temp.txt'), 'w') as f1:
+            f1.write(temp_content)
         t = threading.Thread(target=self._monitor, )
         t.start()
         # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
@@ -106,11 +109,8 @@ class TsDown(object):
                 if trys >= 3:
                     raise Exception(f"访问下载链接超时! | index: {index} | status: {resp.status_code}")
                 time.sleep(2)
-        with open(os.path.join(self.path, 'temp.txt'), 'a+') as f1:
-            f1.write('file ' + os.path.join(self.path, index).replace('\\', '\\\\') + '\n')
         with open(os.path.join(self.path, index), "wb") as f2:
-            for chunk in resp.iter_content(chunk_size):
-                f2.write(self.cryptor.decrypt(chunk))
+            f2.write(self.cryptor.decrypt(resp.content))
         self.getsize += 1  # 更新getsize值, 已下载内容大小
 
     def _monitor(self):
@@ -129,7 +129,8 @@ if __name__ == "__main__":
     save_path = 'D:\\SpiderNote\\Ts'
     with open("video.txt", 'r', encoding='utf-8') as f:
         down_list = f.read().split('\n')
-        down_list.remove("")
+        if "" in down_list:
+            down_list.remove("")
     logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
     for _ in down_list:
         md = TsDown(_, save_path)
