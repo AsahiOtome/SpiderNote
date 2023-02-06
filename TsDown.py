@@ -1,8 +1,10 @@
 import os.path
+import time
 
 import parsel
 from util import *
 from Crypto.Cipher import AES
+from requests.adapters import HTTPAdapter
 
 
 class TsDown(object):
@@ -14,6 +16,9 @@ class TsDown(object):
         self.index_info = []
         self.cryptor = AES.new('CFebG10dfcF1E23f'.encode('utf-8'), AES.MODE_CBC, 'CFebG10dfcF1E23f'.encode('utf-8'))
         self.session = requests.session()
+        adapter = HTTPAdapter(pool_connections=1000, pool_maxsize=1000, max_retries=3)
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
         self.session.headers = create_headers()
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
         self.size = 0  # 获取对象切片数量信息
@@ -26,7 +31,8 @@ class TsDown(object):
     def parser(self):
         """解析网址, 获取基本信息与下载访问地址"""
         data = parsel.Selector(self._get_info(self.url))
-
+        if not data.xpath("//article[@class='article-content']/p/iframe"):
+            data = parsel.Selector(self._get_info(self.url))
         # 获取share网址, 访问获得token
         url_share = data.xpath("//article[@class='article-content']/p/iframe")[0].attrib.get("src")
         self.title = data.xpath("./head/title/text()").extract_first()
@@ -61,6 +67,7 @@ class TsDown(object):
         self._stack_downloader()
         while True:
             if self.getsize >= self.size:
+                time.sleep(2)
                 break
         dir_path = os.path.dirname(self.path)
         logger.info("下载已完成, 开始进行视频合并")
@@ -115,8 +122,8 @@ class TsDown(object):
 
     def _monitor(self):
         while True:
-            process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             time.sleep(1)  # 按照间隔1s来更新下载进展
+            process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             print(f'\t{self.title} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
             if process >= 100:  # 下载进度超过100%
                 print(f'\t{self.title} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')

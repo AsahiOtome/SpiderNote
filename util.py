@@ -90,7 +90,7 @@ def parse_json(string: str) -> dict:
     begin = string.find('{')
     """end: 按自后往前查找第一个标志"""
     end = len(string) - string[::-1].find('}')
-    return json.loads(string[begin:end])
+    return json.loads(string[begin:end], strict=False)
 
 
 def response_status(resp):
@@ -435,7 +435,7 @@ def ts_concat(file_in, file_out):
         p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         p.communicate()
         while True:
-            time.sleep(10)
+            time.sleep(12)
             if p.returncode == 0:
                 print("\t合并处理: 正在删除临时文件……", end='\r')
                 shutil.rmtree(os.path.dirname(file_in))
