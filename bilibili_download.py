@@ -51,7 +51,7 @@ class BilibiliLogin(object):
             if is_delete == 'y':
                 os.remove(cookie_path)
             elif is_delete == 'n':
-                self.load_cookies_from_local(cookie_path)
+                self.load_cookies_from_local(cookie_file_name)
                 logger.info("已读取本地cookies, 成功登入系统")
                 return
             else:
@@ -126,7 +126,7 @@ class BilibiliLogin(object):
 
 
 class GetBilibiliVideo(object):
-    def __init__(self):
+    def __init__(self, directory):
         logger.info("哔哩哔哩自动化下载程序已启动")
         gl = BilibiliLogin()
         logger.info("登陆组件已加载, 准备执行登入操作")
@@ -137,7 +137,8 @@ class GetBilibiliVideo(object):
         self.bv_id = []
 
         # 下载文件存储与校对地址
-        self.down_path = 'D:\\SpiderNote\\哔哩哔哩动画'
+        examine_dir(directory)
+        self.down_path = directory
 
     def _get_uid(self):
         """获取到对应账号的uid用以访问个人空间"""
