@@ -465,7 +465,7 @@ class Downloader(object):
         self.session = session
         self.getsize = 0  # 记录已下载文件的大小, 用于比较进度
         r = self.session.head(self.url, allow_redirects=True)  # 预先载入一次对象链接, 获取Header信息
-        if r.status_code == '404':
+        if r.status_code == 404:
             r = self.session.get(self.url, allow_redirects=True)
         self.size = int(r.headers['Content-Length'])  # 获取对象总字节大小信息
 
