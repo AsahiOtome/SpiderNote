@@ -274,7 +274,7 @@ class GetBilibiliVideo(object):
             raise FileNotFoundError()
         data = parse_json(play_info).get("data")
         video = pd.DataFrame(data.get("dash").get("video"))
-        audio = pd.DataFrame(data.get("dash").get("video"))
+        audio = pd.DataFrame(data.get("dash").get("audio"))
 
         # 默认可选视频质量是由高到低排序的，所以此处直接选最高的
         quality_chart = dict(zip(data.get("accept_quality"), data.get("accept_description")))
