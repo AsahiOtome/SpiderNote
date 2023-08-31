@@ -1,5 +1,4 @@
 import os.path
-import time
 
 import parsel
 from util import *
@@ -133,7 +132,7 @@ class TsDown(object):
 if __name__ == "__main__":
     logger.info("开始执行TS下载任务")
 
-    save_path = 'D:\\SpiderNote\\Ts'
+    save_path = 'D:\\Spyder Web\\Ts'
     with open("video.txt", 'r', encoding='utf-8') as f:
         down_list = f.read().split('\n')
         if "" in down_list:

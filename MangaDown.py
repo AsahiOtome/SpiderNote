@@ -96,9 +96,6 @@ class MangaDown(object):
         self.session.headers['refer'] = self.down_url
         resp = self.session.post(self.down_url, data=data)
 
-
-
-
         select_list = data.xpath("//div[@class='center scramble-page']")
         for select in select_list:
             self.pic_url.append(select.xpath("./img").attrib.get("data-original"))
@@ -175,7 +172,8 @@ class PicDownloader(object):
         while True:
             process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             time.sleep(0.5)  # 按照间隔1s来更新下载进展
-            print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
+            print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}',
+                  end='\r')  # 展示即时下载速度
             if process >= 100:  # 下载进度超过100%
                 print(f'\t{self.name} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')
                 break

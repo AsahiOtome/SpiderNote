@@ -1,4 +1,5 @@
 from MangaDown import MangaDown
+from TsDown import TsDown
 from bilibili_download import GetBilibiliVideo
 from util import *
 
@@ -17,27 +18,29 @@ if __name__ == '__main__':
             path = 'D:\\Spyder Web\\TsVideo'
             with open("video.txt", 'r', encoding='utf-8') as f:
                 down_list = f.read().split('\n')
-                down_list.remove("")
+                if '' in down_list:
+                    down_list.remove("")
             logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
             for url in down_list:
-                md = MangaDown(url, path)
+                md = TsDown(url, path)
                 md.main()
             time.sleep(2)
             break
         elif down_xpath == '3':
-            logger.info("开始执行漫画下载任务")
-            path = 'D:\\Spyder Web\\Manga'
-            with open("manga.txt", 'r', encoding='utf-8') as f:
-                down_list = f.read().split('\n')
-                down_list.remove("")
-            logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
-            for url in down_list:
-                md = MangaDown(url, path)
-                md.main()
-            time.sleep(2)
-            logger.info("已完成全部下载任务, 开始压缩文件")
-            zipfile(path, "zip")
-            break
+            logger.error("漫画功能目前已停用")
+        #     logger.info("开始执行漫画下载任务")
+        #     path = 'D:\\Spyder Web\\Manga'
+        #     with open("manga.txt", 'r', encoding='utf-8') as f:
+        #         down_list = f.read().split('\n')
+        #         down_list.remove("")
+        #     logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
+        #     for url in down_list:
+        #         md = MangaDown(url, path)
+        #         md.main()
+        #     time.sleep(2)
+        #     logger.info("已完成全部下载任务, 开始压缩文件")
+        #     zipfile(path, "zip")
+        #     break
         elif down_xpath == '0':
             break
         else:
