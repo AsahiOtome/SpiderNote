@@ -378,7 +378,7 @@ def get_digit_input(obj_list, esp='esp', mode='single'):
             _ = str(i + 1).rjust(2, "0")
             content += f'[{_}] {obj_list[i]}\n'
     if mode == 'list':
-        content += f'[0] 全选\n'
+        content += f'[0] 全选/全部下载\n'
     content += f'[{esp}] 退出程序\n请输入: '
     while True:
         reply = input(content)
@@ -515,7 +515,7 @@ class Downloader(object):
         while True:
             process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             last = self.getsize
-            time.sleep(1)  # 按照间隔1s来更新下载进展
+            time.sleep(0.5)  # 按照间隔1s来更新下载进展
             curr = self.getsize
             down = (curr - last) / 1024  # 两次时间间隔的相差字节数/1024 转化为KB单位, 用以描述下载速度
             if down > 1024:

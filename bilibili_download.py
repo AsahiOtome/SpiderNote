@@ -165,7 +165,7 @@ class GetBilibiliVideo(object):
         page_amount = math.ceil(list_fav[fn - 1].get('media_count') / 20)
         time.sleep(0.1)
         while True:
-            print(f"当前收藏夹视频页数总共为 {page_amount} 页, 请选择访问页数:\n[输入0] 全选\n[输入1至{page_amount}] 选择第N页")
+            print(f"当前收藏夹视频页数总共为 {page_amount} 页, 请选择访问页数:\n[输入0] 全选+全部下载\n[输入1至{page_amount}] 选择第N页")
             pn = int(input("请输入:"))
             if pn == 0:
                 logger.info("已选择 [全选] 指令, 正在添加全部对象至指令台...")
