@@ -10,12 +10,12 @@ if __name__ == '__main__':
     while True:
         down_xpath = input("选择需下载对象类型:\n0. 退出程序\n1. 哔哩哔哩下载\n2. .ts视频下载\n3. 漫画下载\n")
         if down_xpath == '1':
-            gbv = GetBilibiliVideo("D:\\Spyder Web\\Bilibili")
+            gbv = GetBilibiliVideo("D:\\Spyder_Web\\Bilibili")
             gbv.main()
             break
         elif down_xpath == '2':
             logger.info("开始执行TS video下载任务")
-            path = 'D:\\Spyder Web\\TsVideo'
+            path = 'D:\\Spyder_Web\\TsVideo'
             with open("video.txt", 'r', encoding='utf-8') as f:
                 down_list = f.read().split('\n')
                 if '' in down_list:

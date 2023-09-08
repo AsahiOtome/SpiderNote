@@ -132,7 +132,7 @@ class TsDown(object):
 if __name__ == "__main__":
     logger.info("开始执行TS下载任务")
 
-    save_path = 'D:\\Spyder Web\\Ts'
+    save_path = 'D:\\Spyder_Web\\Ts'    # 注：路线不可含有空格，否则ffmpeg执行命令时会报路径错误
     with open("video.txt", 'r', encoding='utf-8') as f:
         down_list = f.read().split('\n')
         if "" in down_list:
