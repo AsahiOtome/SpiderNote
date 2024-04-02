@@ -14,7 +14,7 @@ import threading
 import faker
 from subprocess import Popen
 import qrcode
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import copy
 import subprocess
 import ddddocr
@@ -460,7 +460,7 @@ class Downloader(object):
         """
         self.url = url
         self.name = name
-        self.num = max_num
+        self.num_threads = max_num
         self.path = filepath
         self.session = session
         self.getsize = 0  # 记录已下载文件的大小, 用于比较进度
@@ -468,6 +468,11 @@ class Downloader(object):
         if r.status_code == 404:
             r = self.session.get(self.url, allow_redirects=True)
         self.size = int(r.headers['Content-Length'])  # 获取对象总字节大小信息
+        self.lock = threading.Lock()  # 用于同步
+        self.errors = []  # 用于存储下载过程中的错误
+        self.prev_size = 0  # 记录上次检查时已下载完成的大小
+        self.prev_time = time.time()  # 上次检查时的时间戳
+        self.logs = [f"{time.time()} 总size为 {self.size}"]  # 用于记录多线程下运行情况
 
     def down(self, start, end, chunk_size=10240):
         """
@@ -480,22 +485,19 @@ class Downloader(object):
         headers = copy.deepcopy(self.session.headers)
         headers['range'] = f'bytes={start}-{end}'
         trys = 0
-        while True:
-            resp = self.session.get(self.url, headers=headers, stream=True)
-            if str(resp.status_code).startswith('2'):
-                break
-            else:
-                trys += 1
-                resp.close()
-                if trys >= 3:
-                    raise Exception(f"访问下载链接超时! | range: {headers['range']} | status: {resp.status_code}")
-                time.sleep(2)
-        with open(self.path, "rb+") as f:
-            f.seek(start)
-            for chunk in resp.iter_content(chunk_size):
-                f.write(chunk)
-                self.getsize += chunk_size  # 更新getsize值, 已下载内容大小
-        resp.close()
+        try:
+            # 设置timeout，例如10秒，可以根据实际情况调整
+            with self.session.get(self.url, headers=headers, stream=True, timeout=10) as resp:
+                with open(self.path, "rb+") as f:
+                    f.seek(start)
+                    for chunk in resp.iter_content(chunk_size=chunk_size):
+                        with self.lock:
+                            f.write(chunk)
+                            self.getsize += len(chunk)  # 根据实际读取到的块大小更新getsize值
+            self.logs.append(f'{time.time()} 线程start为{start},end为 {end}部分已完成, getsize={self.getsize}')
+        except Exception as e:
+            with self.lock:
+                self.errors.append(e)  # 记录错误
 
     def main(self):
         """
@@ -504,28 +506,56 @@ class Downloader(object):
         """
         with open(self.path, 'wb') as f:  # 加载保存对象文件
             f.truncate(self.size)  # .truncate()设立截断, 此处是用总文件大小预先用空格把文件填充, 方便后续选定不同的位置进行写入
-        tp = ThreadPoolExecutor(max_workers=self.num)  # 加载多线程函数, 设置最大线程数
-        futures = []
-        start = 0  # 下载数据的起点锚点
-        for i in range(self.num):  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
-            end = int((i + 1) / self.num * self.size)  # 下载数据的终点锚点
-            future = tp.submit(self.down, start, end)  # 将函数提交多线程, 并赋予参数
-            futures.append(future)
-            start = end + 1  # 下一线程从另一个起点开始
-        while True:
-            process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
-            last = self.getsize
-            time.sleep(0.5)  # 按照间隔1s来更新下载进展
-            curr = self.getsize
-            down = (curr - last) / 1024  # 两次时间间隔的相差字节数/1024 转化为KB单位, 用以描述下载速度
-            if down > 1024:
-                speed = f'{down / 1024:6.2f}MB/s'  # 大于1024则再转化为MB单位
+        with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
+            futures = []
+            start = 0   # 下载数据的起始点
+            for i in range(self.num_threads):
+                end = int((i + 1) * self.size / self.num_threads) if i < self.num_threads else self.size  # 下载数据的终点锚点
+                futures.append(executor.submit(self.down, start, end))
+                start = end + 1  # 下一线程从另一个起点开始
+
+            # 实时监控下载进度
+            while not all(future.done() for future in futures):
+                self.print_progress()
+                time.sleep(0.5)
+
+            # 完成所有线程后再次打印
+            self.print_progress()
+
+            # 关闭主链接
+            self.session.close()
+
+            # 检查是否有错误发生
+            if self.errors:
+                return False
             else:
-                speed = f'{down:6.2f}KB/s'
-            print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载速度: {speed}', end='\r')  # 展示即时下载速度
-            if process >= 100:  # 下载进度超过100%
-                print(f'\t{self.name} | 下载进度: {100.00:6}% | speed:  00.00KB/s')
-                break
+                return self.size
+
+    def print_progress(self):
+        process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
+
+        current_time = time.time()
+        elapsed_time = current_time - self.prev_time
+        downloaded = self.getsize - self.prev_size
+
+        if elapsed_time > 0:
+            speed = downloaded / elapsed_time  # bytes per second
+            if speed > 1024 * 1024:  # 如果速度大于1MB/s
+                speed_str = f"{speed / (1024 * 1024):.2f} MB/s"
+            elif speed > 1024:  # 如果速度大于1KB/s
+                speed_str = f"{speed / 1024:.2f} KB/s"
+            else:
+                speed_str = f"{speed:.2f} B/s"
+        else:
+            speed_str = "计算中..."
+
+        print(f'\t{self.name} | 下载进度: {process:6.2f}% | 下载速度: {speed_str}', end='\r')  # 展示即时下载速度
+        if process >= 100:  # 下载进度超过100%
+            self.logs.append(f'{time.time()} 输出下载进度超过100%')
+            print(f'\t{self.name} | 下载进度: {100.00:6}% | speed:  00.00KB/s')
+
+        self.prev_size = self.getsize
+        self.prev_time = current_time
 
 
 class Login(object):

@@ -135,6 +135,7 @@ class GetBilibiliVideo(object):
         self.user_agent = self.session.headers.get("User-Agent")
         self.uid = self._get_uid()
         self.bv_id = []
+        self.dl = classmethod
 
         # 下载文件存储与校对地址
         examine_dir(directory)
@@ -161,11 +162,14 @@ class GetBilibiliVideo(object):
         fn = get_digit_input(content, mode='single')
         # 获取对应收藏夹的id号
         logger.info(f"已接收指令, 正在访问收藏夹: {list_fav[fn - 1].get('title')}")
+        self.down_path += f"\\{list_fav[fn - 1].get('title')}"
+        examine_dir(self.down_path)
         fid = list_fav[fn - 1].get("id")
         page_amount = math.ceil(list_fav[fn - 1].get('media_count') / 20)
         time.sleep(0.1)
         while True:
-            print(f"当前收藏夹视频页数总共为 {page_amount} 页, 请选择访问页数:\n[输入0] 全选+全部下载\n[输入1至{page_amount}] 选择第N页")
+            print(
+                f"当前收藏夹视频页数总共为 {page_amount} 页, 请选择访问页数:\n[输入0] 全选+全部下载\n[输入1至{page_amount}] 选择第N页")
             pn = int(input("请输入:"))
             if pn == 0:
                 logger.info("已选择 [全选] 指令, 正在添加全部对象至指令台...")
@@ -253,11 +257,24 @@ class GetBilibiliVideo(object):
             print(f'{title} | 视频文件已存在, 执行跳过...')
             return
         print(f'{title} | 视频最高品质: {highest_quality} | 可下载最高品质: {actual_quality}')
-        dl = Downloader(video_url, '视频文件', os.path.join(self.down_path, f'{title}_.mp4'), self.session)
-        dl.main()
-        dl = Downloader(audio_url, '音频文件', os.path.join(self.down_path, f'{title}_.mp3'), self.session)
-        dl.main()
-        self._splicing(self.down_path, title)
+        while True:
+            self.dl = Downloader(video_url, '视频文件', os.path.join(self.down_path, f'{title}_.mp4'), self.session)
+            size = self.dl.main()
+            if size:
+                break
+            else:
+                print("下载失败, 正在删除已下载文件……")
+                os.remove(os.path.join(self.down_path, f'{title}_.mp4'))
+                print("正在重启下载")
+        while True:
+            self.dl = Downloader(audio_url, '音频文件', os.path.join(self.down_path, f'{title}_.mp3'), self.session)
+            if self.dl.main():
+                break
+            else:
+                print("下载失败, 正在删除已下载文件……")
+                os.remove(os.path.join(self.down_path, f'{title}_.mp3'))
+                print("正在重启下载")
+        self._splicing(self.down_path, title, size)
         time.sleep(2 + random.random())
 
     def get_url(self, url):
@@ -265,12 +282,12 @@ class GetBilibiliVideo(object):
         self.session.headers['referer'] = url
         resp = self.session.get(url=url, headers=self.session.headers)
         xpath = parsel.Selector(resp.text)
-        title = xpath.xpath('//*[@id="viewbox_report"]/h1').attrib.get('title')
+        title = xpath.xpath('//*[@id="viewbox_report"]//h1').attrib.get('title')
         author = xpath.xpath('//meta[@name="author"]').attrib.get('content')
 
         # 获取视频播放信息
         play_info = xpath.xpath('/html/head/script[contains(text(), "window.__playinfo")]/text()').extract_first()
-        if type(play_info) == 'NoneType':
+        if isinstance(play_info, type(None)):
             raise FileNotFoundError()
         data = parse_json(play_info).get("data")
         video = pd.DataFrame(data.get("dash").get("video"))
@@ -293,49 +310,38 @@ class GetBilibiliVideo(object):
         return video_url, audio_url, title, actual_quality, highest_quality
 
     @staticmethod
-    def _splicing(path, title):
+    def _splicing(path, title, size):
         video_path = os.path.join(path, f'{title}_.mp4')
         audio_path = os.path.join(path, f'{title}_.mp3')
         file_path = os.path.join(path, f'{title}.mp4')
+        wait = 5 + round(size/(1024*1024))  # 按照视频文件的大小评估超时阈值, 公式为 5 + 每MB 秒
         cmd = f'ffmpeg -i "{video_path}" -i ' \
               f'"{audio_path}" -c copy "{file_path}"'
         examine_file(file_path)
         print("\t合并处理: 正在合并视频文件与音频文件中……", end='\r')
-        p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        p.communicate()
         while True:
-            time.sleep(0.2)
-            if p.returncode == 0:
-                print("\t合并处理: 正在删除临时文件……", end='\r')
-                try:
-                    if os.path.exists(video_path):
-                        os.remove(video_path)
-                    if os.path.exists(audio_path):
-                        os.remove(audio_path)
-                except IOError:
-                    continue
+            p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            p.communicate()
+            try:
+                p.wait(timeout=wait)
+                while True:
+                    time.sleep(0.2)
+                    if p.returncode == 0:
+                        print("\t合并处理: 正在删除临时文件……", end='\r')
+                        try:
+                            if os.path.exists(video_path):
+                                os.remove(video_path)
+                            if os.path.exists(audio_path):
+                                os.remove(audio_path)
+                        except IOError:
+                            continue
+                        break
                 break
+            except subprocess.TimeoutExpired:
+                print("\t合并出错, 正在重置……", end='\n')
+                p.kill()
         print("\t合并处理: 已完成")
 
-
-"""
-def download(self, url):
-    '''添加线程调用, 提高运行速度'''
-    url_param = self.get_url(url)
-    t = threading.Thread(target=self._download, args=(*list(url_param.values()),))
-    t.start()
-    t.join()
-
-def _download(self, video_url, audio_url, title):
-    video = requests.get(video_url, headers=self.header).content
-    audio = requests.get(audio_url, headers=self.header).content
-    title_new = title + "纯"
-    with open(f'./videoMP4\\{title_new}.mp4', 'wb') as f:
-        f.write(video)
-    with open(f'./videoMP4\\{title_new}.mp3', 'wb') as f:
-        f.write(audio)
-    self._splicing(title, title_new)
-"""
 
 if __name__ == '__main__':
     gbv = GetBilibiliVideo()
