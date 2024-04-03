@@ -66,14 +66,12 @@ class TsDown(object):
         self._stack_downloader()
         while True:
             if self.getsize >= self.size:
+                self.session.close()
                 time.sleep(2)
                 break
         dir_path = os.path.dirname(self.path)
         logger.info("下载已完成, 开始进行视频合并")
-        ts_concat(os.path.join(self.path, 'temp.txt'),
-                  os.path.join(dir_path, 'temp_output.mp4'))
-        os.rename(os.path.join(os.path.dirname(self.path), 'temp_output.mp4'),
-                  os.path.join(dir_path, self.title+'.mp4'))
+        self.merge_ts_files(os.path.join(dir_path, self.title+'.mp4'))
 
     def _stack_downloader(self):
         self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
@@ -82,11 +80,6 @@ class TsDown(object):
         使用多线程函数进行管理
         :return:
         """
-        temp_content = ''
-        for _ in range(self.size):
-            temp_content += 'file ' + os.path.join(self.path, f'index{_}.ts').replace('\\', '\\\\') + '\n'
-        with open(os.path.join(self.path, 'temp.txt'), 'w') as f1:
-            f1.write(temp_content)
         t = threading.Thread(target=self._monitor, )
         t.start()
         # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
@@ -96,6 +89,21 @@ class TsDown(object):
             url = self.url_head + '/' + index
             future = tp.submit(self._down, url, index)  # 将函数提交多线程, 并赋予参数
             futures.append(future)
+
+    def merge_ts_files(self, output_path):
+        # 生成文件路径列表，并确保它们是按顺序排列的
+        # 假设文件名格式为 'index<number>.ts'，并按数字排序
+        file_paths = [os.path.join(self.path, ts) for ts in
+                      sorted(os.listdir(self.path), key=lambda x: int(x.replace('index', '').replace('.ts', '')))]
+
+        with open(output_path, 'wb') as output_file:  # 以二进制写入模式打开输出文件
+            for file_path in file_paths:
+                with open(file_path, 'rb') as input_file:  # 以二进制读取模式打开每个.ts文件
+                    while True:
+                        chunk = input_file.read(1024)  # 读取一小块内容
+                        if not chunk:
+                            break  # 如果没有内容了，结束循环
+                        output_file.write(chunk)  # 将内容写入最终文件
 
     def _down(self, url, index, chunk_size=10240):
         """

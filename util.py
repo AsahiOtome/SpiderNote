@@ -420,29 +420,6 @@ def fix_filename(filename):
     return filename
 
 
-def ts_concat(file_in, file_out):
-    """
-    用于把ts文件切片合并为单一文件, 注意: file_in与file_out不可在同一目录下, 否则会删除file_out
-    :param file_in: 输入文件路径
-    :param file_out: 输出对象路径, 含文件名
-    :return:
-    """
-    if not examine_file(file_in, delete=False):
-        raise Exception("对象文件不存在")
-    else:
-        cmd = f"ffmpeg.exe -f concat -safe 0 -i {file_in} -c copy {file_out}"
-        examine_file(file_out)
-        p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        p.communicate()
-        while True:
-            time.sleep(12)
-            if p.returncode == 0:
-                print("\t合并处理: 正在删除临时文件……", end='\r')
-                shutil.rmtree(os.path.dirname(file_in))
-                break
-        print("\t合并处理: 已完成")
-
-
 class Downloader(object):
     """
     切分型多线程下载器, 适用于单个长视频, 标准调用方法:
@@ -491,8 +468,9 @@ class Downloader(object):
                 with open(self.path, "rb+") as f:
                     f.seek(start)
                     for chunk in resp.iter_content(chunk_size=chunk_size):
+                        # 因为每个线程分配到的文件写入部分可以确定是不相互重叠的，此处可将.write()放在线程锁之外，减少锁的使用范围，提高程序效率
+                        f.write(chunk)
                         with self.lock:
-                            f.write(chunk)
                             self.getsize += len(chunk)  # 根据实际读取到的块大小更新getsize值
             self.logs.append(f'{time.time()} 线程start为{start},end为 {end}部分已完成, getsize={self.getsize}')
         except Exception as e:

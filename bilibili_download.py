@@ -317,29 +317,29 @@ class GetBilibiliVideo(object):
         wait = 5 + round(size/(1024*1024))  # 按照视频文件的大小评估超时阈值, 公式为 5 + 每MB 秒
         cmd = f'ffmpeg -i "{video_path}" -i ' \
               f'"{audio_path}" -c copy "{file_path}"'
-        examine_file(file_path)
         print("\t合并处理: 正在合并视频文件与音频文件中……", end='\r')
         while True:
-            p = Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            p.communicate()
             try:
-                p.wait(timeout=wait)
-                while True:
-                    time.sleep(0.2)
-                    if p.returncode == 0:
-                        print("\t合并处理: 正在删除临时文件……", end='\r')
-                        try:
-                            if os.path.exists(video_path):
-                                os.remove(video_path)
-                            if os.path.exists(audio_path):
-                                os.remove(audio_path)
-                        except IOError:
-                            continue
-                        break
-                break
+                examine_file(file_path)
+                # subprocess.run()相比Popen是一个更高级的API，用于在子进程中运行命令。subprocess.run()默认会等待命令完成，然后返回一个CompletedProcess实例。
+                result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10)
+                if result.returncode == 0:
+                    print("\t合并处理: 正在删除临时文件……", end='\r')
+                    try:
+                        if os.path.exists(video_path):
+                            os.remove(video_path)
+                        if os.path.exists(audio_path):
+                            os.remove(audio_path)
+                        break  # 成功删除文件后退出循环
+                    except OSError as e:
+                        print(f'\t删除文件出错: {e}', end='\n')
+                else:
+                    # 使用result.stdout.decode()来捕捉产生的错误信息
+                    print(f"\t合并失败，错误信息: {result.stdout.decode()}")
+                    break  # 出现错误时退出循环
             except subprocess.TimeoutExpired:
-                print("\t合并出错, 正在重置……", end='\n')
-                p.kill()
+                # subprocess.run()会在超时后首先终止子程序, 随后才抛出错误, 因此不用考虑程序尚未结束的问题
+                print("\t合并超时, 正在重置……", end='\n')
         print("\t合并处理: 已完成")
 
 
