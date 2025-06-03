@@ -257,7 +257,9 @@ class GetBilibiliVideo(object):
             print(f'{title} | 视频文件已存在, 执行跳过...')
             return
         print(f'{title} | 视频最高品质: {highest_quality} | 可下载最高品质: {actual_quality}')
+        try_times = 0
         while True:
+            try_times += 1
             self.dl = Downloader(video_url, '视频文件', os.path.join(self.down_path, f'{title}_.mp4'), self.session)
             size = self.dl.main()
             if size:
@@ -265,14 +267,20 @@ class GetBilibiliVideo(object):
             else:
                 print("下载失败, 正在删除已下载文件……")
                 os.remove(os.path.join(self.down_path, f'{title}_.mp4'))
+                if try_times >= 3:
+                    break
                 print("正在重启下载")
+        try_times = 0
         while True:
+            try_times += 1
             self.dl = Downloader(audio_url, '音频文件', os.path.join(self.down_path, f'{title}_.mp3'), self.session)
             if self.dl.main():
                 break
             else:
                 print("下载失败, 正在删除已下载文件……")
                 os.remove(os.path.join(self.down_path, f'{title}_.mp3'))
+                if try_times >= 3:
+                    break
                 print("正在重启下载")
         self._splicing(self.down_path, title, size)
         time.sleep(2 + random.random())
