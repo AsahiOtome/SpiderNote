@@ -33,7 +33,10 @@ class TsDown(object):
         if not data.xpath("//article[@class='article-content']/p/iframe"):
             data = parsel.Selector(self._get_info(self.url))
         # 获取share网址, 访问获得token
-        url_share = data.xpath("//article[@class='article-content']/p/iframe")[0].attrib.get("src")
+        try:
+            url_share = data.xpath("//article[@class='article-content']/p/iframe")[0].attrib.get("src")
+        except IndexError:
+            return ConnectionError
         self.title = data.xpath("./head/title/text()").extract_first()
         self.title = fix_filename(self.title)
         self.session.headers['refer'] = 'https://madou.club/'
@@ -56,14 +59,32 @@ class TsDown(object):
         self.index_info = re.findall(r"\n(index.*?\.ts)\n", resp.text)
 
     def main(self):
-        logger.info("开始解析对象属性")
-        self.parser()
+        try_times = 1
+        while try_times <= 3:
+            logger.info("开始尝试链接网址信息")
+            try_times += 1
+            try:
+                self.parser()
+                if "未命名" not in self.title:
+                    break
+            except ConnectionError:
+                logger.info("链接错误，尝试重新连接网址，尝试第 {} 次".format(try_times))
+
+        if try_times > 3:
+            logger.info("下载失败！")
+            return False
         self.title = fix_filename(self.title)
         # 创建目录
         self.path = os.path.join(self.path, 'temp')
-        examine_dir(self.path, delete=True)
-        logger.info("开始解析资源链接")
-        self._stack_downloader()
+        try_times = 1
+        while True:
+            try_times += 1
+            if try_times >= 4:
+                raise Exception("下载流程超时次数过多，强制中止！")
+            examine_dir(self.path, delete=True)
+            logger.info("开始进行资源载入")
+            if self._stack_downloader():
+                break
         while True:
             if self.getsize >= self.size:
                 self.session.close()
@@ -71,24 +92,60 @@ class TsDown(object):
                 break
         dir_path = os.path.dirname(self.path)
         logger.info("下载已完成, 开始进行视频合并")
-        self.merge_ts_files(os.path.join(dir_path, self.title+'.mp4'))
+        try:
+            self.merge_ts_files(os.path.join(dir_path, self.title+'.mp4'))
+        except Exception as e:
+            return False
+        logger.info("合并任务完成")
+        examine_dir(self.path, delete=True)
+        return True
 
-    def _stack_downloader(self):
-        self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
-        self.size = len(self.index_info)  # 获取对象切片数量信息
+    def _stack_downloader(self, timeout_event=None):
         """
         使用多线程函数进行管理
         :return:
         """
-        t = threading.Thread(target=self._monitor, )
-        t.start()
-        # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
-        tp = ThreadPoolExecutor(max_workers=16)  # 加载多线程函数, 设置最大线程数
-        futures = []
-        for index in self.index_info:  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
-            url = self.url_head + '/' + index
-            future = tp.submit(self._down, url, index)  # 将函数提交多线程, 并赋予参数
-            futures.append(future)
+        """添加了5分钟超时控制的多线程下载函数"""
+        timeout = 300
+        timeout_event = threading.Event()
+        timer = threading.Timer(timeout, timeout_event.set)  # 超时后触发event
+        timer.start()
+
+        try:
+            self.getsize = 0  # 记录已下载文件的数量, 用于比较进度
+            self.size = len(self.index_info)  # 获取对象切片数量信息
+
+            # 启动监控线程
+            t = threading.Thread(target=self._monitor, )
+            t.start()
+            # t.join() 用于阻塞主线程, 使主线程等待线程执行完成后才继续
+            # 线程池执行下载任务
+            tp = ThreadPoolExecutor(max_workers=16)  # 加载多线程函数, 设置最大线程数
+            futures = []
+            for index in self.index_info:  # 依次启动多线程, 每个线程分配 size/8 的数据字节量
+                if timeout_event.is_set():  # 检查超时
+                    raise TimeoutError("下载超时终止")
+
+                url = self.url_head + '/' + index
+                future = tp.submit(self._down, url, index)  # 将函数提交多线程, 并赋予参数
+                futures.append(future)
+
+            # 等待所有任务完成（带超时检查）
+            for future in futures:
+                if timeout_event.is_set():
+                    raise TimeoutError("下载超时终止")
+                future.result()  # 阻塞等待单个任务完成
+            return True
+
+        except TimeoutError:
+            # 超时后的处理
+            logger.error("[超时] 下载任务已超过10分钟，强制终止")
+            return False
+        finally:
+            timer.cancel()  # 确保取消定时器
+            if hasattr(self, 'tp'):  # 确保线程池关闭
+                self.tp.shutdown(wait=False)
+            return True
 
     def merge_ts_files(self, output_path):
         # 生成文件路径列表，并确保它们是按顺序排列的
@@ -113,6 +170,8 @@ class TsDown(object):
         :param chunk_size: 分块大小(按大小进行对象数据的切割, 依次操作, 以防止内存占用过大)
         :return:
         """
+        if hasattr(self, 'timeout_event') and self.timeout_event.is_set():
+            raise TimeoutError()
         trys = 0
         while True:
             resp = self.session.get(url, headers=self.session.headers)
@@ -129,8 +188,10 @@ class TsDown(object):
 
     def _monitor(self):
         while True:
+            if hasattr(self, 'timeout_event') and self.timeout_event.is_set():
+                raise TimeoutError()
             time.sleep(1)  # 按照间隔1s来更新下载进展
-            process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
+            process = 0 if self.getsize == 0 else self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
             print(f'\t{self.title} | 下载进度: {process:6.2f}% | 下载进程: {self.getsize}/{self.size}', end='\r')  # 展示即时下载速度
             if process >= 100:  # 下载进度超过100%
                 print(f'\t{self.title} | 下载进度: {100.00:6}% | 下载进程: {self.size}/{self.size}')
@@ -143,10 +204,15 @@ if __name__ == "__main__":
     save_path = 'D:\\Spyder_Web\\Ts'    # 注：路线不可含有空格，否则ffmpeg执行命令时会报路径错误
     with open("video.txt", 'r', encoding='utf-8') as f:
         down_list = f.read().split('\n')
-        if "" in down_list:
+        while "" in down_list:
             down_list.remove("")
     logger.info(f"目标链接共 {len(down_list)} 个, 开始进行解析")
     for _ in down_list:
         md = TsDown(_, save_path)
-        md.main()
+        if md.main():
+            remove_processed_url("video.txt", _)
+            logger.info(f"已移除处理完成的链接: {_}")
+            time.sleep(3)
+        else:
+            raise Exception("下载失败，请重新启动程序！")
     logger.info("全部任务完成")

@@ -15,7 +15,7 @@ if __name__ == '__main__':
             break
         elif down_xpath == '2':
             logger.info("开始执行TS video下载任务")
-            path = 'D:\\Spyder_Web\\TsVideo'
+            path = 'D:\\Spyder_Web\\Ts'
             with open("video.txt", 'r', encoding='utf-8') as f:
                 down_list = f.read().split('\n')
                 if '' in down_list:
@@ -25,6 +25,7 @@ if __name__ == '__main__':
                 md = TsDown(url, path)
                 md.main()
             time.sleep(2)
+            logger.info("全部任务完成")
             break
         elif down_xpath == '3':
             logger.error("漫画功能目前已停用")

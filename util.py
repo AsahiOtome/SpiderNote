@@ -596,5 +596,22 @@ class Login(object):
             pickle.dump(self.get_cookies(), f)
 
 
+def remove_processed_url(file_path, processed_url):
+    """
+    从文件中移除已处理的URL
+    :param file_path: 文件路径
+    :param processed_url: 对象链接
+    :return:
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        urls = [line.strip() for line in f if line.strip()]
+    if processed_url in urls:
+        urls.remove(processed_url)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(urls))
+        return True
+    return False
+
+
 if __name__ == "__main__":
     pass
