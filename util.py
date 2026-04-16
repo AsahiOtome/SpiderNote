@@ -444,6 +444,8 @@ class Downloader(object):
         r = self.session.head(self.url, allow_redirects=True)  # 预先载入一次对象链接, 获取Header信息
         if r.status_code == 404:
             r = self.session.get(self.url, allow_redirects=True)
+            if r.status_code == 404:
+                raise Exception("尝试链接出错")
         self.size = int(r.headers['Content-Length'])  # 获取对象总字节大小信息
         self.lock = threading.Lock()  # 用于同步
         self.errors = []  # 用于存储下载过程中的错误
@@ -510,7 +512,7 @@ class Downloader(object):
                 return self.size
 
     def print_progress(self):
-        process = self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
+        process = 0 if self.getsize == 0 else self.getsize / self.size * 100  # 已完成下载进度, 转化为百分率
 
         current_time = time.time()
         elapsed_time = current_time - self.prev_time
